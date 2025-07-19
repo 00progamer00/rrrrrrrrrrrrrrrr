@@ -2,7 +2,7 @@ import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 import logging
 import time
 
@@ -128,7 +128,7 @@ You are a helpful customer support assistant for ZTX Hosting, a premium game ser
 
 **Company Information:**
 - ZTX Hosting is a premium hosting provider with a strong presence in Asia
-- We specialize in game server hosting with cutting-edge infrastructure
+- We specialize in game server hosting with cutting-cutting-edge infrastructure
 - Our team consists of experienced professionals dedicated to providing the best hosting solutions
 - We focus on delivering high-performance, reliable hosting services across Asian markets
 
@@ -281,6 +281,16 @@ Please provide a clear, helpful response in a conversational tone. You can use f
             else:
                 ai_response_text = "AI could not generate a complete response. Please try asking something else or rephrase your query."
 
+            # --- START: Added code for response length handling ---
+            # Define Discord's message content limit (typically 2000 characters for a single message, 4000 for embeds/form body)
+            # Using 1900 to be safe for simple text messages.
+            DISCORD_MESSAGE_LIMIT = 1900 
+
+            if len(ai_response_text) > DISCORD_MESSAGE_LIMIT:
+                logging.warning(f"AI response too long ({len(ai_response_text)} chars), truncating to {DISCORD_MESSAGE_LIMIT} chars.")
+                ai_response_text = ai_response_text[:DISCORD_MESSAGE_LIMIT] + "\n\n*(Response truncated due to length. Please ask a more specific question.)*"
+            # --- END: Added code for response length handling ---
+
             return jsonify({"answer": ai_response_text})
             
         except Exception as e:
@@ -324,4 +334,3 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
     print(f"Server running on http://0.0.0.0:5000")
     print("AI Assistant Backend (Python) is ready!")
-
