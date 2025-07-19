@@ -12,17 +12,43 @@ app = Flask(__name__)
 # For production, restrict to specific origins for security.
 CORS(app)
 
-# Google Generative AI Setup
-API_KEY = os.getenv("GOOGLE_API_KEY")
+# Multiple API keys configuration
+API_KEYS = [
+    os.getenv("GOOGLE_API_KEY_1"),
+    os.getenv("GOOGLE_API_KEY_2"),
+    os.getenv("GOOGLE_API_KEY_3"),
+    # Add more keys if available
+]
 
-if not API_KEY:
-    print("Error: GOOGLE_API_KEY not found in .env file.")
-    print("Please create a .env file in the same directory as main.py and add your API key like this: GOOGLE_API_KEY='YOUR_API_KEY_HERE'")
+# Filter out None values
+API_KEYS = [key for key in API_KEYS if key is not None]
 
-genai.configure(api_key=API_KEY)
+if not API_KEYS:
+    print("Error: No valid API keys found in .env file.")
+    print("Please add at least one API key to your .env file like this:")
+    print("GOOGLE_API_KEY_1='your_api_key_here'")
+    print("GOOGLE_API_KEY_2='your_second_api_key_here'")
+    print("GOOGLE_API_KEY_3='your_third_api_key_here'")
 
-MODEL_NAME = 'models/gemini-2.0-flash'
-model = genai.GenerativeModel(MODEL_NAME)
+MODEL_NAME = 'models/gemini-1.5-flash'
+current_key_index = 0
+
+def get_next_api_key():
+    """Rotate to the next API key in the list"""
+    global current_key_index
+    current_key_index = (current_key_index + 1) % len(API_KEYS)
+    return API_KEYS[current_key_index]
+
+def initialize_model():
+    """Initialize the model with the current API key"""
+    try:
+        genai.configure(api_key=API_KEYS[current_key_index])
+        return genai.GenerativeModel(MODEL_NAME)
+    except Exception as e:
+        print(f"Error initializing model with key {current_key_index}: {e}")
+        return None
+
+model = initialize_model() if API_KEYS else None
 
 # API Endpoint for AI Assistant
 @app.route('/api/ask-ai', methods=['POST'])
@@ -36,42 +62,45 @@ def ask_ai():
     if not prompt:
         return jsonify({"error": "Prompt is required in the request body."}), 400
 
-    try:
-        response = model.generate_content(prompt)
-        ai_response_text = ""
+    global model
+    
+    for attempt in range(len(API_KEYS)):
+        try:
+            response = model.generate_content(prompt)
+            ai_response_text = ""
 
-        # Attempt to extract text from the response object
-        if hasattr(response, 'text'):
-            ai_response_text = response.text
-        elif hasattr(response, 'parts'):
-            for part in response.parts:
-                if hasattr(part, 'text'):
-                    ai_response_text += part.text
-        elif hasattr(response, 'candidates') and response.candidates:
-            for candidate in response.candidates:
-                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                    for part in candidate.content.parts:
-                        if hasattr(part, 'text'):
-                            ai_response_text += part.text
+            # Attempt to extract text from the response object
+            if hasattr(response, 'text'):
+                ai_response_text = response.text
+            elif hasattr(response, 'parts'):
+                for part in response.parts:
+                    if hasattr(part, 'text'):
+                        ai_response_text += part.text
+            elif hasattr(response, 'candidates') and response.candidates:
+                for candidate in response.candidates:
+                    if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'text'):
+                                ai_response_text += part.text
 
-        # Fallback if no text is extracted or it's empty after stripping
-        if not ai_response_text.strip():
-            if hasattr(response, 'prompt_feedback') and hasattr(response.prompt_feedback, 'safety_ratings'):
-                safety_reasons = []
-                for rating in response.prompt_feedback.safety_ratings:
-                    if rating.blocked:
-                        safety_reasons.append(f"{rating.category}: {rating.probability}")
-                if safety_reasons:
-                    ai_response_text = f"AI could not generate a response due to safety concerns: {', '.join(safety_reasons)}. Please try a different query."
+            # Fallback if no text is extracted or it's empty after stripping
+            if not ai_response_text.strip():
+                if hasattr(response, 'prompt_feedback') and hasattr(response.prompt_feedback, 'safety_ratings'):
+                    safety_reasons = []
+                    for rating in response.prompt_feedback.safety_ratings:
+                        if rating.blocked:
+                            safety_reasons.append(f"{rating.category}: {rating.probability}")
+                    if safety_reasons:
+                        ai_response_text = f"AI could not generate a response due to safety concerns: {', '.join(safety_reasons)}. Please try a different query."
+                    else:
+                        ai_response_text = "AI could not generate a complete response. Please try asking something else or rephrase your query."
                 else:
                     ai_response_text = "AI could not generate a complete response. Please try asking something else or rephrase your query."
-            else:
-                ai_response_text = "AI could not generate a complete response. Please try asking something else or rephrase your query."
 
-            print(f"Warning: AI generated no text content or unexpected format. Raw response: {response}")
+                print(f"Warning: AI generated no text content or unexpected format. Raw response: {response}")
 
-        # Create the prompt with context
-        context_prompt = f"""
+            # Create the prompt with context
+            context_prompt = f"""
 You are a helpful customer support assistant for ZTX Hosting, a premium game server hosting company that provides Minecraft, Rust, ARK, and other game server hosting services.
 
 **About ZTX Hosting Team:**
@@ -251,27 +280,34 @@ Customer Question: {prompt}
 Please provide a clear, helpful response in a conversational tone. You can use formatting like bullet points or numbered lists if it helps organize the information better.
 """
 
-        response = model.generate_content(context_prompt)
-        ai_response_text = response.text
+            response = model.generate_content(context_prompt)
+            ai_response_text = response.text
 
-        return jsonify({"answer": ai_response_text})
-    except Exception as e:
-        print(f"Error generating AI content: {e}")
-        errorMessage = 'AI query ka jawab nahi de sakta. Kripya phir se koshish karein.'
+            return jsonify({"answer": ai_response_text})
+        except Exception as e:
+            error_str = str(e).upper()
+            
+            if "QUOTA" in error_str or "RATE LIMIT" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                print(f"API key {current_key_index} quota exhausted, rotating to next key")
+                next_key = get_next_api_key()
+                genai.configure(api_key=next_key)
+                model = genai.GenerativeModel(MODEL_NAME)
+                continue
+                
+            print(f"Error generating AI content: {e}")
+            errorMessage = 'AI query ka jawab nahi de sakta. Kripya phir se koshish karein.'
 
-        error_str = str(e).upper()
-        if "SAFETY" in error_str:
-            errorMessage = 'Main is query ka jawab nahi de sakta safety reasons ki wajah se. Kripya alag tarah se sawal puchein.'
-        elif "API KEY" in error_str:
-            errorMessage = 'Invalid or expired API key. Please check your GOOGLE_API_KEY in the .env file.'
-        elif "QUOTA" in error_str or "RATE LIMIT" in error_str:
-            errorMessage = 'AI query limit reached or billing issue. Please try again later.'
-        elif "404" in error_str and "MODEL" in error_str:
-            errorMessage = f'The selected AI model ({MODEL_NAME}) is not found or supported for your API key. Please choose an available model from genai.list_models().'
-        elif "RESOURCE_EXHAUSTED" in error_str:
-            errorMessage = 'AI service resources are temporarily exhausted. Please try again in a moment.'
-
-        return jsonify({"error": errorMessage}), 500
+            if "SAFETY" in error_str:
+                errorMessage = 'Main is query ka jawab nahi de sakta safety reasons ki wajah se. Kripya alag tarah se sawal puchein.'
+            elif "API KEY" in error_str:
+                errorMessage = 'Invalid or expired API key. Please check your API keys in the .env file.'
+            elif "404" in error_str and "MODEL" in error_str:
+                errorMessage = f'The selected AI model ({MODEL_NAME}) is not found or supported for your API key. Please choose an available model from genai.list_models().'
+            
+            return jsonify({"error": errorMessage}), 500
+    
+    # If all keys have been tried and failed
+    return jsonify({"error": "All API keys have exhausted their quotas. Please try again later."}), 500
 
 # Serve the frontend
 @app.route('/')
