@@ -230,60 +230,32 @@ Here are our Game Hosting Plans:
 
 **Currently Available:**
 
-**Minecraft Hosting Plans:**
-1. **Grass Plan** - ₹100/month
-   - RAM: 2 GB
-   - CPU: 100%
-   - Disk: 5 GB NVMe
-   - Backup Slots: 1
+**🎮 Minecraft Hosting Plans:**
 
-2. **Dirt Plan** - ₹200/month
-   - RAM: 4 GB
-   - CPU: 150%
-   - Disk: 10 GB NVMe
-   - Backup Slots: 2
+We offer a range of Minecraft hosting plans designed to cater to different needs and server sizes. Here's a breakdown of our currently available plans:
 
-3. **Stone Plan** - ₹300/month
-   - RAM: 6 GB
-   - CPU: 160%
-   - Disk: 15 GB NVMe
-   - Backup Slots: 2
+**📊 Plan Comparison Table:**
 
-4. **Wood Plan** - ₹400/month
-   - RAM: 8 GB
-   - CPU: 200%
-   - Disk: 20 GB NVMe
-   - Backup Slots: 2
+| Plan Name     | Price/Month | RAM (GB) | CPU (%) | Disk (GB) | Backup Slots |
+|---------------|-------------|----------|---------|-----------|--------------|
+| 🌱 Grass      | ₹100        | 2        | 100%    | 5 NVMe    | 1            |
+| 🟤 Dirt       | ₹200        | 4        | 150%    | 10 NVMe   | 2            |
+| 🪨 Stone      | ₹300        | 6        | 160%    | 15 NVMe   | 2            |
+| 🪵 Wood       | ₹400        | 8        | 200%    | 20 NVMe   | 2            |
+| ⚙️ Iron       | ₹600        | 12       | 250%    | 30 NVMe   | 3            |
+| 🟨 Gold       | ₹800        | 16       | 350%    | 40 NVMe   | 4            |
+| 💎 Diamond    | ₹1300       | 24       | 450%    | 50 NVMe   | 8            |
+| 🔥 Netherite  | ₹1760       | 32       | 550%    | 70 NVMe   | 10           |
+| 🗿 Bedrock    | ₹3500       | 64       | 950%    | 100 NVMe  | 10           |
 
-5. **Iron Plan** - ₹600/month
-   - RAM: 12 GB
-   - CPU: 250%
-   - Disk: 30 GB NVMe
-   - Backup Slots: 3
+**💡 Plan Recommendations:**
+- **🌱 Grass/🟤 Dirt**: Perfect for small servers (2-10 players)
+- **🪨 Stone/🪵 Wood**: Great for medium servers (10-25 players)
+- **⚙️ Iron/🟨 Gold**: Ideal for larger communities (25-50 players)
+- **💎 Diamond/🔥 Netherite**: Best for big servers with heavy mods (50+ players)
+- **🗿 Bedrock**: Ultimate performance for massive networks (100+ players)
 
-6. **Gold Plan** - ₹800/month
-   - RAM: 16 GB
-   - CPU: 350%
-   - Disk: 40 GB NVMe
-   - Backup Slots: 4
-
-7. **Diamond Plan** - ₹1300/month
-   - RAM: 24 GB
-   - CPU: 450%
-   - Disk: 50 GB NVMe
-   - Backup Slots: 8
-
-8. **Netherite Plan** - ₹1760/month
-   - RAM: 32 GB
-   - CPU: 550%
-   - Disk: 70 GB NVMe
-   - Backup Slots: 10
-
-9. **Bedrock Plan** - ₹3500/month
-   - RAM: 64 GB
-   - CPU: 950%
-   - Disk: 100 GB NVMe
-   - Backup Slots: 10
+All plans include: ✅ NVMe SSD Storage ✅ DDoS Protection ✅ 24/7 Support ✅ Instant Setup ✅ Full Root Access
 
 **Coming Soon:**
 - **Rust** - Lag-free Rust server hosting with instant setup and DDoS protection
@@ -319,12 +291,14 @@ Please provide a clear, helpful response in a conversational tone. You can use f
                 logging.info(f"API key #{current_key_index + 1} quota exhausted, rotating to next key")
                 next_key = get_next_api_key()
                 if next_key is None:
-                    # All keys exhausted
-                    break
+                    # All keys exhausted - return wait message
+                    return jsonify({
+                        "answer": "⏳ **AI Service Temporarily Unavailable**\n\nOur AI assistant is currently experiencing high demand. Please wait 40 seconds and try again.\n\n**Alternative Support Options:**\n\n🔗 **Discord Support:** https://discord.gg/svjjbKTA5J\n📧 **Email:** Contact our admin Mr. Akashay Thakur\n💬 **WhatsApp:** Available for urgent queries\n\n**Why This Happens:**\nAll our AI API keys have reached their hourly limits. Our system automatically resets them every hour for optimal performance.\n\n**What To Do:**\n✅ Wait 40 seconds and ask your question again\n✅ Join our Discord for immediate human support\n✅ Contact us via WhatsApp for urgent hosting issues\n\nThank you for your patience! 🙏"
+                    }), 200
                 client = genai.Client(api_key=next_key)
                 continue
                 
-            errorMessage = 'AI query ka jawab nahi de sakta. Kripya phir se koshish karein.'
+            errorMessage = '⏳ AI temporarily unavailable. Please wait 40 seconds and try again, or contact support via Discord: https://discord.gg/svjjbKTA5J'
 
             if "SAFETY" in error_str:
                 errorMessage = 'Main is query ka jawab nahi de sakta safety reasons ki wajah se. Kripya alag tarah se sawal puchein.'
@@ -336,7 +310,9 @@ Please provide a clear, helpful response in a conversational tone. You can use f
             return jsonify({"error": errorMessage}), 500
     
     # If all keys have been tried and failed
-    return jsonify({"error": "All API keys have exhausted their quotas. Please try again later."}), 500
+    return jsonify({
+        "answer": "⏳ **AI Service Temporarily Unavailable**\n\nOur AI assistant is currently experiencing high demand. Please wait 40 seconds and try again.\n\n**Alternative Support Options:**\n\n🔗 **Discord Support:** https://discord.gg/svjjbKTA5J\n📧 **Email:** Contact our admin Mr. Akashay Thakur\n💬 **WhatsApp:** Available for urgent queries\n\n**Why This Happens:**\nAll our AI API keys have reached their hourly limits. Our system automatically resets them every hour for optimal performance.\n\n**What To Do:**\n✅ Wait 40 seconds and ask your question again\n✅ Join our Discord for immediate human support\n✅ Contact us via WhatsApp for urgent hosting issues\n\nThank you for your patience! 🙏"
+    }), 200
 
 # Serve the frontend
 @app.route('/')
