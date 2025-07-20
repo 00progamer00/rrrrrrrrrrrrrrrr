@@ -2,7 +2,7 @@ import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
-import google.generativeai as genai
+import google.generativeai as genai  # Correct import statement
 import logging
 import time
 
@@ -81,12 +81,18 @@ def get_next_api_key():
     return None
 
 def initialize_client():
-    """Initialize the Gemini client with the current API key"""
+    """Configure the Gemini client with the current API key and return a model instance."""
     try:
         if not API_KEYS: # Check if there are actually any keys to use
             logging.error("No API keys available to initialize client.")
             return None
-        return genai.Client(api_key=API_KEYS[current_key_index])
+        
+        # Configure the API key globally for genai
+        genai.configure(api_key=API_KEYS[current_key_index])
+        
+        # Return a GenerativeModel instance directly
+        return genai.GenerativeModel(model_name=MODEL_NAME)
+        
     except Exception as e:
         logging.error(f"Error initializing client with key {current_key_index}: {e}")
         return None
@@ -117,13 +123,17 @@ def ask_ai():
         # Before attempting to use the client, ensure it's initialized for the current key
         # Re-initialize if client is None or if we've rotated to a new key.
         # Only re-initialize if API_KEYS exists to avoid errors when it's empty.
-        if client is None or (API_KEYS and client.api_key != API_KEYS[current_key_index]):
-            client = initialize_client()
+        if client is None or (API_KEYS and genai.active_model_name != MODEL_NAME): # Check if configured model matches
+            # The previous genai.Client(api_key=...) would set the API key,
+            # but with genai.configure, the API key is set globally.
+            # We need to ensure the correct key is configured before getting the model.
+            genai.configure(api_key=API_KEYS[current_key_index])
+            client = initialize_client() # initialize_client now returns a GenerativeModel
             
-            # If client initialization failed even after trying
+            # If client (model instance) initialization failed even after trying
             if client is None:
                 if API_KEYS: # Only try to rotate if there were actual keys configured
-                    logging.error(f"Failed to initialize client with API key #{current_key_index + 1}. Attempting next key if available.")
+                    logging.error(f"Failed to initialize AI model with API key #{current_key_index + 1}. Attempting next key if available.")
                     next_key = get_next_api_key()
                     if next_key is None:
                         # All keys exhausted, no more to try
@@ -160,7 +170,7 @@ You are a helpful customer support assistant for ZTX Hosting, a premium game ser
 
 **Company Information:**
 - ZTX Hosting is a premium hosting provider with a strong presence in Asia
-- We specialize in game server hosting with cutting-cutting-edge infrastructure
+- We specialize in game server hosting with cutting-edge infrastructure
 - Our team consists of experienced professionals dedicated to providing the best hosting solutions
 - We focus on delivering high-performance, reliable hosting services across Asian markets
 
@@ -298,9 +308,11 @@ All plans include: ✅ NVMe SSD Storage ✅ DDoS Protection ✅ 24/7 Support ✅
 Please answer the following customer question in a helpful, professional, and friendly manner. If the question is about hosting, servers, technical issues, or gaming, provide detailed and accurate information. If someone asks about VPS plans or dedicated hosting plans, provide the above pricing and specifications. If it's unrelated to hosting or gaming, politely redirect them to hosting-related topics.
 
 Customer Question: {prompt}
+
+Please provide a clear, helpful response in a conversational tone. You can use formatting like bullet points or numbered lists if it helps organize the information better.
 """
-            response = client.models.generate_content(
-                model=MODEL_NAME,
+
+            response = client.generate_content(  # Changed from client.models.generate_content
                 contents=context_prompt
             )
             
@@ -334,7 +346,9 @@ Customer Question: {prompt}
                     return jsonify({
                         "answer": "⏳ **AI Service Temporarily Unavailable**\n\nOur AI assistant is currently experiencing high demand. Please wait 40 seconds and try again.\n\n**Alternative Support Options:**\n\n🔗 **Discord Support:** https://discord.gg/svjjbKTA5J\n📧 **Email:** Contact our admin Mr. Akashay Thakur\n💬 **WhatsApp:** Available for urgent queries\n\n**Why This Happens:**\nAll our AI API keys have reached their hourly limits. Our system automatically resets them every hour for optimal performance.\n\n**What To Do:**\n✅ Wait 40 seconds and ask your question again\n✅ Join our Discord for immediate human support\n✅ Contact us via WhatsApp for urgent hosting issues\n\nThank you for your patience! 🙏"
                     }), 200
-                client = genai.Client(api_key=next_key)
+                # When rotating key, re-configure genai with the new key
+                genai.configure(api_key=next_key)
+                client = genai.GenerativeModel(model_name=MODEL_NAME) # Re-instantiate the model with the new configuration
                 continue
                 
             errorMessage = '⏳ AI temporarily unavailable. Please wait 40 seconds and try again, or contact support via Discord: https://discord.gg/svjjbKTA5J'
