@@ -83,11 +83,15 @@ def get_next_api_key():
 def initialize_client():
     """Initialize the Gemini client with the current API key"""
     try:
+        if not API_KEYS: # Check if there are actually any keys to use
+            logging.error("No API keys available to initialize client.")
+            return None
         return genai.Client(api_key=API_KEYS[current_key_index])
     except Exception as e:
         logging.error(f"Error initializing client with key {current_key_index}: {e}")
         return None
 
+# Initial client setup
 client = initialize_client() if API_KEYS else None
 
 # API Endpoint for AI Assistant
@@ -107,7 +111,35 @@ def ask_ai():
     # Reset exhausted keys if enough time has passed
     reset_exhausted_keys_if_needed()
     
-    for attempt in range(len(API_KEYS)):
+    # Use len(API_KEYS) or 1 to ensure loop runs at least once even if API_KEYS is empty
+    # This loop manages API key rotation and retries
+    for attempt in range(len(API_KEYS) if API_KEYS else 1): 
+        # Before attempting to use the client, ensure it's initialized for the current key
+        # Re-initialize if client is None or if we've rotated to a new key.
+        # Only re-initialize if API_KEYS exists to avoid errors when it's empty.
+        if client is None or (API_KEYS and client.api_key != API_KEYS[current_key_index]):
+            client = initialize_client()
+            
+            # If client initialization failed even after trying
+            if client is None:
+                if API_KEYS: # Only try to rotate if there were actual keys configured
+                    logging.error(f"Failed to initialize client with API key #{current_key_index + 1}. Attempting next key if available.")
+                    next_key = get_next_api_key()
+                    if next_key is None:
+                        # All keys exhausted, no more to try
+                        return jsonify({
+                            "answer": "⏳ **AI Service Temporarily Unavailable**\n\nOur AI assistant is currently experiencing high demand. Please wait 40 seconds and try again.\n\n**Alternative Support Options:**\n\n🔗 **Discord Support:** https://discord.gg/svjjbKTA5J\n📧 **Email:** Contact our admin Mr. Akashay Thakur\n💬 **WhatsApp:** Available for urgent queries\n\n**Why This Happens:**\nAll our AI API keys have reached their hourly limits. Our system automatically resets them every hour for optimal performance.\n\n**What To Do:**\n✅ Wait 40 seconds and ask your question again\n✅ Join our Discord for immediate human support\n✅ Contact us via WhatsApp for urgent hosting issues\n\nThank you for your patience! 🙏"
+                        }), 200
+                    # Continue to the next loop iteration to try with the newly set key
+                    continue
+                else:
+                    # No API keys were ever found/configured from the start
+                    return jsonify({"error": "No valid API keys configured. Please set GEMINI_API_KEY or GOOGLE_API_KEY_x in your environment variables."}), 500
+
+        # If client is still None after initialization attempt (e.g., if API_KEYS was empty from the start and loop ran once)
+        if client is None:
+            return jsonify({"error": "AI service could not be initialized. Please ensure valid API keys are configured."}), 500
+
         try:
             # Create the prompt with context
             context_prompt = f"""
@@ -266,10 +298,7 @@ All plans include: ✅ NVMe SSD Storage ✅ DDoS Protection ✅ 24/7 Support ✅
 Please answer the following customer question in a helpful, professional, and friendly manner. If the question is about hosting, servers, technical issues, or gaming, provide detailed and accurate information. If someone asks about VPS plans or dedicated hosting plans, provide the above pricing and specifications. If it's unrelated to hosting or gaming, politely redirect them to hosting-related topics.
 
 Customer Question: {prompt}
-
-Please provide a clear, helpful response in a conversational tone. You can use formatting like bullet points or numbered lists if it helps organize the information better.
 """
-
             response = client.models.generate_content(
                 model=MODEL_NAME,
                 contents=context_prompt
